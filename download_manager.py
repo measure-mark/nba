@@ -1,3 +1,8 @@
+from .request_throttle import RequestThrottle
+from .helper_functions import link_to_file_name
+import os
+import requests
+
 class DownloadManager:
     def __init__(self):
         self.counter=RequestThrottle()
