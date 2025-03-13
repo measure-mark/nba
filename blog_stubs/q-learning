@@ -1,0 +1,1 @@
+states = { did not bet, bet and won, bet and lost, bet and bet cancelled }

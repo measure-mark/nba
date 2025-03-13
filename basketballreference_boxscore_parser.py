@@ -1,6 +1,8 @@
 import pandas as pd
 from bs4 import BeautifulSoup
 import re
+import os
+from typing import Tuple
 
 def parseTable(boxscore_table):
     # Extract the headers from the second row (ignoring the first row)
@@ -41,9 +43,9 @@ def parseTable(boxscore_table):
     return df
 
 def get_team_and_period(table, verbose: bool = False) -> Tuple[str, str]:
-  """ returns a tuple of (team, period) as strings.
-If the period is the full game, it returns "FG" 
-"""
+    """ returns a tuple of (team, period) as strings.
+    If the period is the full game, it returns "FG" 
+    """
   
     cap = table.caption.text
     if verbose: print("get_team_and_period", cap)
