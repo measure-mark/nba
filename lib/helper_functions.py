@@ -10,3 +10,7 @@ def validate_date(date:str):
     # Just check that it is 8 digits.
     # add in value checking for months and days as needed
     assert re.match(r'\d{8}$', date)
+
+
+def is_zero(x, tol=1e-4):
+    return abs(x)<tol

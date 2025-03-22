@@ -1,5 +1,5 @@
 from .request_throttle import RequestThrottle
-from .helper_functions import link_to_file_name
+from .lib.helper_functions import link_to_file_name
 import os
 import requests
 

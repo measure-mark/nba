@@ -7,3 +7,4 @@
 # TODO
 * check in the code that made the big dataframe
 * Handle overtimes in parser
+# figure out how to handle nba cup/in season tournament
