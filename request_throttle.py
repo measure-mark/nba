@@ -3,6 +3,8 @@ import datetime
 import time
 
 
+# Obviously, this could/should be parameterized. At the moment, we only use it for basketball reference
+# which has very speed limits.
 class RequestThrottle:
     def __init__(self):
         self.d = deque()

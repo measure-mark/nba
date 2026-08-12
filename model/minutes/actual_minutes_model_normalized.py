@@ -1,6 +1,7 @@
 from data_model.box_score_store import BoxScoreStore
 from lib.helper_functions import is_zero
-from model.model import MinutesPlayedModel
+from model.minutes import check_minuntes_make_sense
+from model.minutes import MinutesPlayedModel
 
 
 import pandas as pd

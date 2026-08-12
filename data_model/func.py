@@ -10,3 +10,5 @@ def bs_filename_to_hometeam(x:str) -> str:
     if m is None:
         raise ValueError(f"{x} does not have the correct format")
     return m.group(1)
+
+

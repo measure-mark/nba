@@ -33,7 +33,7 @@ class BoxScoreStore:
         self.Nplayers = len(pid_map)
         
         # Known players as of last training, if this number changes then our data has changed
-        assert self.Nplayers == 1162 
+        assert self.Nplayers == 1442 
 
     def game_data_frame(self, team:str, date:str):
         validate_date(date)

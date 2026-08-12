@@ -2,21 +2,9 @@ import pandas as pd
 from IPython.display import display
 from data_model.box_score_store import BoxScoreStore
 from lib.helper_functions import is_zero
-from model.model import MinutesPlayedModel
+from model.minutes import check_minuntes_make_sense
+from model.minutes import MinutesPlayedModel
 
-
-def check_minuntes_make_sense(minutes):
-    """ Validate that the total minutes played is a full game or close to a full game"""
-    if is_zero(minutes-240, tol=0.1):
-        return True
-    # Single overtime
-    if is_zero(minutes-265, tol=0.1):
-        return True
-    
-    # Double overtime
-    if is_zero(minutes-290, tol=0.1):
-        return True
-    return False
 
 class LagMinutesOneGame(MinutesPlayedModel):
     """use the exact minutes played from the previous game.
