@@ -7,6 +7,10 @@
 - Fewer lines are better than more. Prefer the shorter version when both are
   equally clear.
 
+## MCP Tools
+- favor fewer MCP tools over more.  When changing the MCP server always ask, "does this functionality naturally fit into one of our existing tools?"
+- the exception to fewer tools is that we should not mix slow processes with fast ones. For example, a quick state pull from REDIS should not be pared with a heavy disk/io process that needs to parse many files.
+
 ## Abstraction
 
 - Avoid unnecessary abstraction. Abstraction should exist only where it adds

@@ -1,14 +1,14 @@
-import re
-def bs_filename_to_date(x:str) -> str:
-    m = re.match(r'boxscores_(\d{8})0', x)
-    if m is None:
-        raise ValueError(f"{x} does not have the correct format")
-    return m.group(1)
+from leagues.links import LinkScheme
 
-def bs_filename_to_hometeam(x:str) -> str:
-    m = re.match(r'boxscores_\d{8}0(...)', x)
-    if m is None:
-        raise ValueError(f"{x} does not have the correct format")
-    return m.group(1)
+# The NBA scheme, kept as a module-level default so the long-standing
+# bs_filename_to_* helpers keep working for callers that predate multi-league support.
+# New code should go through league.links instead.
+_NBA_LINKS = LinkScheme()
 
 
+def bs_filename_to_date(x: str) -> str:
+    return _NBA_LINKS.parse_boxscore_filename(x)[0]
+
+
+def bs_filename_to_hometeam(x: str) -> str:
+    return _NBA_LINKS.parse_boxscore_filename(x)[1]

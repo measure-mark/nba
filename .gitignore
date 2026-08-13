@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Cached basketball-reference HTML. Re-fetchable, and large -- never commit it.
+data/*/raw/
+
+# Local config. .env.example is the tracked template.
+.env

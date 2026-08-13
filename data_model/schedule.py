@@ -1,101 +1,93 @@
 import pandas as pd
-import re
 import json
-from nba.lib.helper_functions import validate_date
 
-class NBASchedule:
+from lib.helper_functions import validate_date
+from leagues.config import LeagueConfig
+
+
+class Schedule:
+    """Schedule information for one league. Mostly used to find the previous game a
+    team played, which we then use for backtesting.
     """
-    Contains NBA schedule information. Currently most useful for finding the previous game 
-    a team played, which we can then use for backtesting.
-    
-    """
-    def __init__(self):
-            
-        schedules_df=pd.read_csv("data/schedule.csv")
-        schedules_df["yyyymmdd"]=schedules_df.yyyymmdd.apply(int).apply(str)
-        schedules_df.sort_values(['team', 'yyyymmdd'], inplace=True)
+
+    def __init__(self, league: LeagueConfig):
+        self.league = league
+
+        schedules_df = pd.read_csv(league.data_root / "schedule.csv")
+        schedules_df["yyyymmdd"] = schedules_df.yyyymmdd.apply(int).apply(str)
+        schedules_df.sort_values(["team", "season", "yyyymmdd"], inplace=True)
         schedules_df.reset_index(drop=True, inplace=True)
-        
-            # Assign next game date to each row
-        schedules_df["next_game_dt"]=schedules_df.yyyymmdd.shift(-1)
-        schedules_df.loc[schedules_df.team.shift(-1) != schedules_df.team, "next_game_dt"]=None
 
-  
-            # Assign next game date to each row
-        schedules_df["prev_game_dt"]=schedules_df.yyyymmdd.shift(1)
-        schedules_df.loc[schedules_df.team.shift(1) != schedules_df.team, "prev_game_dt"]=None
+        # Next/previous game, chained by row adjacency within a team. The chain has to
+        # break at a season boundary as well as a team boundary -- otherwise the last
+        # game of one season links to the first game of the next.
+        same_next = (schedules_df.team.shift(-1) == schedules_df.team) & (
+            schedules_df.season.shift(-1) == schedules_df.season
+        )
+        schedules_df["next_game_dt"] = schedules_df.yyyymmdd.shift(-1).where(same_next)
 
-        
-        self.schedules_df=schedules_df
-        
-        self.next_games = {}
-        self.prev_games = {}
-        
-        for g,gg in schedules_df.groupby("team"):
-            self.next_games[g] = gg.set_index('yyyymmdd').next_game_dt.to_dict()
+        same_prev = (schedules_df.team.shift(1) == schedules_df.team) & (
+            schedules_df.season.shift(1) == schedules_df.season
+        )
+        schedules_df["prev_game_dt"] = schedules_df.yyyymmdd.shift(1).where(same_prev)
 
-        for g,gg in schedules_df.groupby("team"):
-            self.prev_games[g] = gg.set_index('yyyymmdd').prev_game_dt.to_dict()
-            
-        with open("data/team_map.json", "r") as reader:
+        with open(league.data_root / "team_map.json", "r") as reader:
             team_abbrev_map = json.load(reader)
-            team_rev_map = {v.strip() : k for k,v in team_abbrev_map.items()}
+        team_rev_map = {v.strip(): k for k, v in team_abbrev_map.items()}
 
-        schedules_df["opp"] = schedules_df.opp_name.map(team_rev_map) 
-        schedules_df["home_team"]=schedules_df['team']
-        mask = schedules_df.game_location=='@'
-        schedules_df.loc[mask, 'home_team'] = schedules_df[mask].opp
-        
-        
-        
+        schedules_df["opp"] = schedules_df.opp_name.str.strip().map(team_rev_map)
+        schedules_df["home_team"] = schedules_df["team"]
+        away = schedules_df.game_location == "@"
+        schedules_df.loc[away, "home_team"] = schedules_df.loc[away, "opp"]
+
+        self.schedules_df = schedules_df
+        self.next_games = {
+            team: gg.set_index("yyyymmdd").next_game_dt.to_dict()
+            for team, gg in schedules_df.groupby("team")
+        }
+        self.prev_games = {
+            team: gg.set_index("yyyymmdd").prev_game_dt.to_dict()
+            for team, gg in schedules_df.groupby("team")
+        }
+
     def get_next_game(self, team, date):
-        """ team: three letter abbreviation
-            date: yyyymmdd format, must be a valid game date
-        """     
+        """team: three letter abbreviation. date: yyyymmdd, must be a valid game date."""
         validate_date(date)
         return self.next_games[team][date]
-    
+
     def get_prev_game(self, team, date):
-        """ team: three letter abbreviation
-            date: yyyymmdd format, must be a valid game date
-        """     
+        """team: three letter abbreviation. date: yyyymmdd, must be a valid game date."""
         validate_date(date)
         return self.prev_games[team][date]
-    
+
     def get_all_games_on(self, date):
-        """ returns a DataFrame for all games on a given date
-            with columns date, home, away
-        """
+        """All games on a date, as a DataFrame with columns date, home, away."""
         validate_date(date)
         df = self.schedules_df
-        mask = df.yyyymmdd==date
-        mask &= df.game_location.isnull()# | df.game_location=="NaN"
-        df = df[["yyyymmdd", "home_team", "opp", "game_result"]].copy()
-        df.reset_index(drop=True, inplace=True)
-        df.rename(columns = {'yyyymmdd': 'date', 'home_team': 'home', 'opp': 'away'}, inplace=True)
-        return df[mask]
-  
+        # Home rows only -- an away row is the same game seen from the other side.
+        games = df[(df.yyyymmdd == date) & df.game_location.isnull()]
+        return (
+            games[["yyyymmdd", "home_team", "opp", "game_result"]]
+            .rename(columns={"yyyymmdd": "date", "home_team": "home", "opp": "away"})
+            .reset_index(drop=True)
+        )
+
     def game_score(self, team, date):
         validate_date(date)
         df = self.schedules_df
         xxx = df.loc[(df.yyyymmdd == date) & (df.team == team), ["pts", "opp_pts"]]
-        
-        assert xxx.shape == (1,2)
-        
-        #mask &= df.game_location.isnull()# | df.game_location=="NaN"
-        #df = df[["yyyymmdd", "team", "OPP", "game_result"]].copy()
-        #df.reset_index(drop=True, inplace=True)
-        #df.rename(columns = {'yyyymmdd': 'date', 'team': 'home', 'OPP': 'away'}, inplace=True)
+
+        assert xxx.shape == (1, 2)
         return xxx.iloc[0, 0], xxx.iloc[0, 1]
 
     def get_away_team(self, home_team, date):
         validate_date(date)
         df = self.schedules_df
         rv = df.loc[(df.yyyymmdd == date) & (df.home_team == home_team), ["opp"]]
-        return rv.iloc[0,0]
+        return rv.iloc[0, 0]
 
     def get_record(self, team, date):
         validate_date(date)
         df = self.schedules_df
         rv = df.loc[(df.yyyymmdd == date) & (df.team == team), ["wins", "losses"]]
-        return rv.iloc[0,:2]
+        return rv.iloc[0, :2]

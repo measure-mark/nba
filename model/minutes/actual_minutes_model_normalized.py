@@ -17,25 +17,28 @@ class ActualMinutesModelNormalized(MinutesPlayedModel):
 
         g = self.g
 
+        league = g.league
+        regulation = league.regulation_minutes
+
         hdf = g.game_data_frame(home_team, game_date)
         adf = g.game_data_frame(away_team, game_date)
 
         #Setup the feature vector for our model
-        if not check_minuntes_make_sense(hdf.MPC.sum()):
-                display(adf[["Player", "MP", "MPC"]])
+        if not check_minuntes_make_sense(hdf.MPC.sum(), league):
+                display(hdf[["Player", "MP", "MPC"]])
                 raise Exception(f"{game_date} home team {home_team} minutes totalled wrong {hdf.MPC.sum()}")
-        hdf["MPCi"] = hdf.MPC * 240 / hdf.MPC.sum()
+        hdf["MPCi"] = hdf.MPC * regulation / hdf.MPC.sum()
 
             #Setup the feature vector for our model
-        if not check_minuntes_make_sense(adf.MPC.sum()):
+        if not check_minuntes_make_sense(adf.MPC.sum(), league):
                 display(adf[["Player", "MP", "MPC"]])
                 raise Exception(f"{game_date} away team {away_team} minutes totalled wrong {adf.MPC.sum()}")
 
-        adf["MPCi"] = -1 * adf.MPC * 240 / adf.MPC.sum()
+        adf["MPCi"] = -1 * adf.MPC * regulation / adf.MPC.sum()
         df=pd.concat([hdf, adf])
 
         assert is_zero(df.MPCi.sum()), f"Total offset minutes are {df.MPCi.sum()}"
-        assert is_zero(df.MPCi.apply(abs).sum() - 480), df.MPCi.apply(abs).sum()
+        assert is_zero(df.MPCi.apply(abs).sum() - 2 * regulation), df.MPCi.apply(abs).sum()
 
         # dropping for safety
         df.drop(columns=["PTS"], inplace=True)

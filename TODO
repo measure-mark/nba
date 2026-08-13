@@ -1,0 +1,6 @@
+Confirm that these are done:
+
+Migrate throttle to redis-local architecture
+Change from enviornment.yml to requirements.txt
+Simplify docker-compose.yml: inline the Dockerfile and deduplicate config
+expected_players should be computed from player_map.json at load time

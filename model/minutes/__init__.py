@@ -1,20 +1,20 @@
 import pandas as pd
-from lagged_minutes import LagMinutesOneGame
+
+from leagues.config import LeagueConfig
 from lib.helper_functions import is_zero
 
 
-def check_minuntes_make_sense(minutes):
-    """ Validate that the total minutes played is a full game or close to a full game"""
-    if is_zero(minutes-240, tol=0.1):
-        return True
-    # Single overtime
-    if is_zero(minutes-265, tol=0.1):
-        return True
+def check_minuntes_make_sense(minutes, league: LeagueConfig):
+    """Validate that the total minutes played is a full game, or a full game plus
+    overtime, for this league.
 
-    # Double overtime
-    if is_zero(minutes-290, tol=0.1):
-        return True
-    return False
+    The valid totals are league-specific: NBA regulation is 240 player-minutes
+    (5 x 48), WNBA is 200 (5 x 40). Applying one league's totals to the other rejects
+    every game, so this takes the league rather than assuming.
+    """
+    return any(
+        is_zero(minutes - total, tol=0.1) for total in league.valid_game_minutes()
+    )
 
 
 class MinutesPlayedModel:

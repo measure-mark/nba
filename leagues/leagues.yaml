@@ -1,0 +1,50 @@
+# Per-league scraping configuration. Edit here rather than in code.
+#
+# path_prefix is the only URL difference between NBA and WNBA; it lands in both the
+# link (/wnba/boxscores/...) and the cached filename (wnba_boxscores_...).
+#
+# regulation_minutes is 5 players x the length of a full game. overtime_minutes is
+# 5 players x the length of one OT period.
+
+host:
+  max_requests: 19
+  window_seconds: 65
+  min_gap_seconds: 3.0
+
+leagues:
+  nba:
+    display_name: NBA
+    base_url: https://www.basketball-reference.com
+    path_prefix: ""
+    regulation_minutes: 240   # 5 x 48
+    overtime_minutes: 25      # 5 x 5
+    period_labels: [Q1, Q2, Q3, Q4]
+    season_spans_years: true  # 2019 means the 2018-19 season
+    enabled: true
+
+  wnba:
+    display_name: WNBA
+    base_url: https://www.basketball-reference.com
+    path_prefix: wnba
+    regulation_minutes: 200   # 5 x 40
+    overtime_minutes: 25      # 5 x 5
+    period_labels: [Q1, Q2, Q3, Q4]
+    season_spans_years: false # the season sits inside one calendar year
+    enabled: true
+    # Verified against live /wnba/teams/TTT/2025_games.html pages: all 13 resolve, and
+    # together they list 310 distinct games from 20250516 to 20251010.
+    # Expansion teams (Toronto, Portland) join in 2026 -- add their codes then.
+    teams: [ATL, CHI, CON, DAL, GSV, IND, LAS, LVA, MIN, NYL, PHO, SEA, WAS]
+
+  # Stub only -- not implemented. NCAA is on a different host, uses slug team ids
+  # ("duke") rather than 3-letter codes, and plays halves, so it needs its own
+  # LinkScheme before it can be enabled.
+  ncaa:
+    display_name: NCAA Men's
+    base_url: https://www.sports-reference.com/cbb
+    path_prefix: cbb
+    regulation_minutes: 200   # 5 x 40
+    overtime_minutes: 25      # 5 x 5
+    period_labels: [H1, H2]
+    season_spans_years: true
+    enabled: false

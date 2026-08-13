@@ -1,0 +1,26 @@
+[project]
+name = "nba"
+version = "0.1.0"
+description = "Multi-league basketball-reference scraper and data model"
+requires-python = ">=3.14"
+dependencies = [
+    "pandas",
+    "numpy",
+    "beautifulsoup4",
+    "requests",
+    "pyyaml",
+    "redis",
+    "mcp",
+]
+
+[project.optional-dependencies]
+# ipython is only needed by model/minutes/{lagged_minutes,actual_minutes_model_normalized}.py,
+# which call display() in their error paths. Nothing on the scraper path imports them, so it
+# stays out of the runtime deps and out of the container image.
+dev = ["pytest", "fakeredis", "ipython"]
+
+[tool.pytest.ini_options]
+# The repo is imported with its root on sys.path (`from lib...`, `from data_model...`).
+# Without this, pytest only puts tests/ on the path and collection fails.
+pythonpath = ["."]
+testpaths = ["tests"]

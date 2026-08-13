@@ -1,0 +1,17 @@
+name: nba
+channels:
+  - conda-forge
+dependencies:
+  - python=3.14
+  - pandas
+  - numpy
+  - beautifulsoup4
+  - requests
+  - pyyaml
+  - pytest
+  - ipython
+  - pip
+  - pip:
+      - redis
+      - mcp
+      - fakeredis

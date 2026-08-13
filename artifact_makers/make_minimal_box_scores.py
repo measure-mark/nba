@@ -55,40 +55,61 @@ def parseTable(boxscore_table):
     df = pd.DataFrame(player_stats, columns=headers)
     return df
 
+# Box score tables carry a structured id, e.g.
+#   box-ATL-game-basic   box-ATL-q1-basic   box-ATL-h2-basic   box-ATL-ot1-basic
+# which is far steadier than the caption prose. The original parser read the caption,
+# matching "<Team> Basic and Advanced Stats Table"; basketball-reference now writes
+# "<Team> (0-1) Table", so every table fell through to (None, None) and the box score
+# parsed to nothing at all -- for every league, not just WNBA.
+TABLE_ID_RE = re.compile(r"^box-([A-Za-z0-9]{2,4})-(game|q[1-4]|h[12]|ot\d*)-basic$")
+
+
 def get_team_and_period(table, verbose: bool = False) -> Tuple[str, str]:
-    cap = table.caption.text
-    if verbose: print("get_team_and_period", cap)
-    cap = re.sub("Table", "", cap)
-    if "Basic and Advanced Stats" in cap:
-        period = "FG"
-        team = re.sub(" Basic and Advanced Stats", "", cap)
-        return team, period
-    
-    m = re.match(r"^(.*) \(([QH][1234])\)", cap)
+    """Returns (team code, period). Period is "FG" for the full game.
+
+    Overtime tables now resolve too -- they used to be dropped, which is the
+    'Handle overtimes in parser' TODO.
+    """
+    m = TABLE_ID_RE.match(table.get("id") or "")
+    if verbose:
+        print("get_team_and_period", table.get("id"))
     if m is None:
         return None, None
-    return m.group(1), m.group(2)
+
+    team, period = m.group(1).upper(), m.group(2)
+    return team, "FG" if period == "game" else period.upper()
+
+
+def get_team_name(table) -> str:
+    """Full team name from the caption, with the win-loss record stripped.
+
+    Kept because agg.csv's Team column has always held the full name, and
+    team_map.json is keyed on it.
+    """
+    cap = table.caption.text if table.caption else ""
+    cap = re.sub(r"\s*Table\s*$", "", cap)
+    return re.sub(r"\s*\(\d+-\d+\)\s*$", "", cap).strip()
 
 def get_minimal_stats(soup: BeautifulSoup, filename: str, verbose=False) -> pd.DataFrame:
     ts = soup.find_all(name='table', class_='stats_table')
 
     dfs=[]
     for t in ts:
-        if verbose: print("\t", t.caption.text)
-        df = parseTable(t)
-        if verbose and False: display(df)
-        team, period = get_team_and_period(t)
-        if verbose: print(team, period)
-        if period is None:
+        team_code, period = get_team_and_period(t)
+        if verbose: print("\t", t.get("id"), team_code, period)
+        if period != "FG":
+            # Quarter/half/OT splits are dropped; we only keep the full-game table.
             continue
-        elif verbose:
-            print("Got this far")
-        df=df[["Player", "Player ID", "MP", "PTS"]]
-        if period == "FG":
-            df["Team"]=team
-            df["Period"]=period
-            dfs.append(df)
-    df=pd.concat(dfs)
+        df = parseTable(t)[["Player", "Player ID", "MP", "PTS"]]
+        df["Team"] = get_team_name(t)
+        df["Team Code"] = team_code
+        df["Period"] = period
+        dfs.append(df)
+
+    if not dfs:
+        raise ValueError(f"No full-game tables found in {filename}")
+
+    df = pd.concat(dfs, ignore_index=True)
     df["filename"]=filename
     return df
 

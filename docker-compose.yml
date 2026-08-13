@@ -1,0 +1,86 @@
+services:
+  app-base: &app-build
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM python:3.14-slim
+        WORKDIR /app
+        COPY pyproject.toml ./
+        RUN pip install --no-cache-dir \
+                pandas numpy beautifulsoup4 requests pyyaml redis mcp
+        COPY lib/ ./lib/
+        COPY leagues/ ./leagues/
+        COPY throttle/ ./throttle/
+        COPY status/ ./status/
+        COPY data_model/ ./data_model/
+        COPY artifact_makers/ ./artifact_makers/
+        COPY scraper/ ./scraper/
+        COPY mcp_server/ ./mcp_server/
+        COPY download_manager.py ./
+        ENV PYTHONPATH=/app \
+            PYTHONUNBUFFERED=1 \
+            DATA_ROOT=/app/data
+
+  redis:
+    # TODO, this should be redis 8.10
+    image: redis:8-alpine
+    # appendonly so the rate-limit window and scrape status survive a restart. Losing
+    # the window is what let the old scraper burst a full window of requests on boot.
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      # Loopback only -- host tools (redis-cli, scraper.probe) can reach it, but it is
+      # not exposed on the network. Redis here has no auth.
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # Works its SEASONS target down, then keeps the current season fresh. A deep backfill
+  # runs for days at 19 requests/65s, so this is a long-lived worker, not a cron tick --
+  # `restart: unless-stopped` is what carries it across reboots.
+  scraper:
+    <<: *app-build
+    command: ["python", "-m", "scraper.daemon"]
+    # Tunables live in .env (copy .env.example). Only the wiring that is a property of
+    # the compose topology itself stays here.
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATA_ROOT: /app/data
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mcp:
+    <<: *app-build
+    command: ["python", "-m", "mcp_server.server"]
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATA_ROOT: /app/data
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8000"
+    ports:
+      # Published on 3000 -- 8000 is the FastMCP default and collides with other local
+      # apps. The container still listens on 8000.
+      - "127.0.0.1:3000:8000"
+    volumes:
+      # Read-only: this service reports status, it never writes data.
+      - ./data:/app/data:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  redis-data:

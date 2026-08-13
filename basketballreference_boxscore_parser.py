@@ -84,21 +84,25 @@ def get_minimal_stats(soup: BeautifulSoup, filename: str, verbose=False) -> pd.D
     return df
 
 ### Below this is the main for making the stats table that just saves minutes, playerinfo and pts
-header, write_mode = True, 'w'
+def main():
+    header, write_mode = True, 'w'
 
-big_dfs = []
-for filename in os.listdir("."):
-    m = re.match(r"^boxscores_\d{9}\w{3}\.html", filename)
-    if not m:
-        print("skipping", filename)
-        continue
-    
-    with open(filename, "rb") as reader:
-        page = reader.read()
-    
-    # Parse the HTML content of the page
-    soup = BeautifulSoup(page, 'html.parser')
-    df = get_minimal_stats(soup, filename)
-    df.to_csv("agg.csv", header=header, mode= write_mode)
-    header, write_mode = False, 'a'
+    for filename in os.listdir("."):
+        m = re.match(r"^boxscores_\d{9}\w{3}\.html", filename)
+        if not m:
+            print("skipping", filename)
+            continue
+
+        with open(filename, "rb") as reader:
+            page = reader.read()
+
+        # Parse the HTML content of the page
+        soup = BeautifulSoup(page, 'html.parser')
+        df = get_minimal_stats(soup, filename)
+        df.to_csv("agg.csv", header=header, mode= write_mode)
+        header, write_mode = False, 'a'
+
+
+if __name__ == "__main__":
+    main()
 
