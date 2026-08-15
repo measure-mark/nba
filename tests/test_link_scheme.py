@@ -70,3 +70,33 @@ def test_is_boxscore_link_discriminates(nba, wnba):
     assert not nba.links.is_boxscore_link("/players/w/willima02.html")
     assert wnba.links.is_boxscore_link("/wnba/boxscores/202605170ATL.html")
     assert not wnba.links.is_boxscore_link("/boxscores/202105160TOR.html")
+
+
+@pytest.mark.parametrize(
+    "league_key,boxscore,pbp,boxscore_filename,pbp_filename",
+    [
+        (
+            "nba",
+            "/boxscores/202105160TOR.html",
+            "/boxscores/pbp/202105160TOR.html",
+            "boxscores_202105160TOR.html",
+            "boxscores_pbp_202105160TOR.html",
+        ),
+        (
+            "wnba",
+            "/wnba/boxscores/202606220ATL.html",
+            "/wnba/boxscores/pbp/202606220ATL.html",
+            "wnba_boxscores_202606220ATL.html",
+            "wnba_boxscores_pbp_202606220ATL.html",
+        ),
+    ],
+)
+def test_pbp_links_and_filenames_follow_the_boxscore_game(
+    registry, league_key, boxscore, pbp, boxscore_filename, pbp_filename
+):
+    links = registry.get(league_key).links
+
+    assert links.pbp_link_for_boxscore(boxscore) == pbp
+    assert links.pbp_filename_for_boxscore(boxscore_filename) == pbp_filename
+    assert links.matches_pbp_filename(pbp_filename)
+    assert not links.matches_boxscore_filename(pbp_filename)

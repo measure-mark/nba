@@ -75,8 +75,8 @@ services:
       # apps. The container still listens on 8000.
       - "127.0.0.1:3000:8000"
     volumes:
-      # Read-only: this service reports status, it never writes data.
-      - ./data:/app/data:ro
+      # Data directory needs write access for aggregation operations.
+      - ./data:/app/data
     depends_on:
       redis:
         condition: service_healthy

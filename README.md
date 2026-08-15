@@ -21,7 +21,7 @@ status/           scrape + aggregation state in Redis
 scraper/          the sweep and the daemon that runs it
 mcp_server/       read-only MCP status server
 data/<league>/    agg.csv, schedule.csv, team_map.json, player_map.json
-data/<league>/raw/  cached HTML (gitignored)
+data/<league>/raw/  cached box-score and play-by-play HTML (gitignored)
 ```
 
 Adding a league means adding an entry to `leagues/leagues.yaml` — no code change,
@@ -81,6 +81,9 @@ Progress is visible through the MCP server (`get_status`, `get_coverage`). The r
 is resumable — the cache is on disk, so an interrupted run picks up where it stopped.
 Finished seasons are never re-fetched; only the in-progress season's schedule pages
 expire, which is how new games get discovered.
+
+Each discovered box score also has its play-by-play page cached. `get_coverage` reports
+PBP availability, including cached files that are missing the required `table#pbp`.
 
 ## TODO
 

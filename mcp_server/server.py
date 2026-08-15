@@ -8,11 +8,12 @@ from mcp.server import MCPServer
 from artifact_makers.aggregate import aggregate_box_scores, cached_box_scores
 from artifact_makers.make_player_map import make_player_map
 from leagues.registry import LeagueRegistry
+from scraper.play_by_play import play_by_play_coverage
 from status.store import StatusStore
 from throttle.redis_throttle import RedisThrottle
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-DATASETS = ("schedules", "boxscores")
+DATASETS = ("schedules", "boxscores", "pbp")
 ARTIFACTS = ("agg", "team_map", "player_map")
 
 mcp = MCPServer("nba-status", instructions="Read-only status for the basketball-reference scraper.")
@@ -66,16 +67,27 @@ def get_status(league: str | None = None) -> dict:
 
 @mcp.tool()
 def get_coverage(league: str, season: int | None = None) -> dict:
-    """What games we actually hold for a league: date range, counts, and missing dates.
+    """What games we hold for a league, including play-by-play completeness.
 
     Reads the league's agg.csv rather than Redis -- the data on disk is the only honest
-    answer to "what do we have", since Redis only records the last run.
+    answer to "what do we have", since Redis only records the last run. Play-by-play
+    coverage compares cached PBP pages to cached box scores, so it works before an
+    aggregation has run.
     """
     lg = registry.get(league)
     agg = lg.data_root / "agg.csv"
     cached = cached_box_scores(lg)
+    pbp = play_by_play_coverage(
+        lg, cached, _season_years(lg, season) if season is not None else None
+    )
     if not agg.exists():
-        return {"league": league, "agg_csv": None, "cached_box_scores": len(cached)}
+        return {
+            "league": league,
+            "season": season,
+            "agg_csv": None,
+            "cached_box_scores": len(cached),
+            "play_by_play": pbp,
+        }
 
     df = pd.read_csv(agg, usecols=["filename"])
     dates = pd.Series(
@@ -92,6 +104,7 @@ def get_coverage(league: str, season: int | None = None) -> dict:
         "first_game": dates.iloc[0] if len(dates) else None,
         "last_game": dates.iloc[-1] if len(dates) else None,
         "distinct_game_dates": int(dates.nunique()),
+        "play_by_play": pbp,
     }
 
 
@@ -102,31 +115,21 @@ def build_artifacts(league: str) -> dict:
     This two-step process parses all cached box scores and creates the aggregated
     dataset and player map for the league.
     """
+    import time
+
     lg = registry.get(league)
+    start_time = time.time()
 
     # Step 1: Aggregate box scores
     rows_out, source_files = aggregate_box_scores(lg)
-    store.set_aggregation(
-        lg.key,
-        "agg",
-        {
-            "last_run": datetime.now(UTC).isoformat(),
-            "rows_out": str(rows_out),
-            "source_files": str(source_files),
-        }
-    )
+    agg_duration = time.time() - start_time
+    store.aggregation_ran(lg.key, "agg", agg_duration, rows_out, source_files)
 
     # Step 2: Generate player map
     if rows_out > 0:
         player_map = make_player_map(lg)
-        store.set_aggregation(
-            lg.key,
-            "player_map",
-            {
-                "last_run": datetime.now(UTC).isoformat(),
-                "player_count": str(len(player_map)),
-            }
-        )
+        map_duration = time.time() - start_time - agg_duration
+        store.aggregation_ran(lg.key, "player_map", map_duration, len(player_map), source_files)
         players_found = len(player_map)
     else:
         players_found = 0
@@ -136,10 +139,12 @@ def build_artifacts(league: str) -> dict:
         "aggregation": {
             "rows_written": rows_out,
             "source_files_parsed": source_files,
+            "duration_s": round(agg_duration, 3),
             "agg_csv_path": str(lg.data_root / "agg.csv"),
         },
         "player_map": {
             "players_found": players_found,
+            "duration_s": round(time.time() - start_time - agg_duration, 3),
             "player_map_path": str(lg.data_root / "player_map.json"),
         }
     }

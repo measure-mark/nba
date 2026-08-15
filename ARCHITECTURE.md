@@ -30,7 +30,8 @@ runs as one-off local scripts.
 
 - **`scraper/`** — the sweep and the daemon that runs it. `sweep.py`'s
   `LeagueSweeper` does one pass per league: fetch team schedule pages, collect
-  box score links off them, download missing box scores, aggregate; one bad
+  box score links off them, download missing box scores and play-by-play pages,
+  aggregate; one bad
   team code is skipped rather than aborting the sweep. `daemon.py` builds a
   `LeagueSweeper` per enabled league and loops it on an interval.
 
@@ -87,7 +88,7 @@ runs as one-off local scripts.
 2. `LeagueSweeper.sweep()` fetches each team's schedule page through
    `DownloadManager` (caching raw HTML under `data/<league>/raw/`,
    gitignored), collects box score links off it via `LinkScheme`, then
-   downloads any box scores not already cached.
+   downloads any uncached box scores and their play-by-play pages.
 3. `artifact_makers.aggregate` reads the cached box score HTML and writes
    `data/<league>/agg.csv`. `make_team_map.py` and `make_player_map.py` derive
    `team_map.json` and `player_map.json` from that CSV.

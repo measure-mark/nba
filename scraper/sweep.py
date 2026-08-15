@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 from artifact_makers.aggregate import aggregate_box_scores
 from download_manager import DownloadManager
 from leagues.config import LeagueConfig
+from scraper.play_by_play import has_pbp_table
 from status.store import StatusStore
 
 # What a failed fetch actually looks like: a network problem, or a bad status code
@@ -45,8 +46,21 @@ class LeagueSweeper:
         try:
             links, skipped = self.fetch_schedules(season, verbose, schedule_max_age)
             fetched = self.fetch_box_scores(links, verbose)
+            pbp_fetched = self.fetch_play_by_play(links, verbose)
             rows, files = self.aggregate()
-            return {"job": job_id, "skipped_teams": skipped, **fetched, "rows": rows, "files": files}
+            return {
+                "job": job_id,
+                "skipped_teams": skipped,
+                # The daemon uses these totals to decide whether the backlog is still
+                # draining. PBP-only backfills must therefore count as new work too.
+                "new": fetched["new"] + pbp_fetched["new"],
+                "cached": fetched["cached"] + pbp_fetched["cached"],
+                "failed": fetched["failed"] + pbp_fetched["failed"],
+                "boxscores": fetched,
+                "pbp": pbp_fetched,
+                "rows": rows,
+                "files": files,
+            }
         finally:
             self.status.clear_inflight(league.key)
 
@@ -107,6 +121,35 @@ class LeagueSweeper:
             new, cached = (new + 1, cached) if is_new else (new, cached + 1)
 
         self.status.pull_finished(league.key, "boxscores", new, cached)
+        return {"new": new, "cached": cached, "failed": failed}
+
+    def fetch_play_by_play(self, boxscore_links: list[str], verbose: bool = False) -> dict:
+        """Download and validate the PBP page corresponding to each box score.
+
+        An HTTP-successful response without ``table#pbp`` is retained for diagnosis,
+        but is reported as a failed PBP pull and does not stop the wider sweep.
+        """
+        league = self.league
+        self.status.pull_started(league.key, "pbp")
+        new = cached = failed = 0
+
+        for boxscore_link in boxscore_links:
+            link = league.links.pbp_link_for_boxscore(boxscore_link)
+            try:
+                is_new, page = self.downloader.download_if_new(link, verbose=verbose)
+            except FETCH_ERRORS as exc:
+                failed += 1
+                self.status.pull_failed(league.key, "pbp", f"{link}: {exc}")
+                continue
+
+            if not has_pbp_table(page):
+                failed += 1
+                self.status.pull_failed(league.key, "pbp", f"{link}: missing table#pbp")
+                continue
+
+            new, cached = (new + 1, cached) if is_new else (new, cached + 1)
+
+        self.status.pull_finished(league.key, "pbp", new, cached)
         return {"new": new, "cached": cached, "failed": failed}
 
     def aggregate(self) -> tuple[int, int]:

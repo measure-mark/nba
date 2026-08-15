@@ -38,6 +38,8 @@ class StubDownloader(DownloadManager):
             raise RuntimeError(f"404 for {link}")
         if "/teams/" in link:
             return True, SCHEDULE_HTML.encode()
+        if "/boxscores/pbp/" in link:
+            return True, b'<html><table id="pbp"></table></html>'
         return True, b"<html>box score</html>"
 
 
@@ -75,8 +77,11 @@ def test_sweep_records_status_under_its_own_league(sweeper, wnba):
     sw, _ = sweeper
     result = sw.sweep(season=2026)
 
-    assert result["new"] == 2  # two distinct box scores, deduped across 12 team pages
+    assert result["new"] == 4  # two box scores plus their two PBP pages
+    assert result["boxscores"] == {"new": 2, "cached": 0, "failed": 0}
+    assert result["pbp"] == {"new": 2, "cached": 0, "failed": 0}
     assert sw.status.get_pull("wnba", "boxscores")["files_new"] == "2"
+    assert sw.status.get_pull("wnba", "pbp")["files_new"] == "2"
     assert sw.status.get_pull("nba", "boxscores") == {}
     assert sw.status.get_inflight("wnba") is None  # cleared when the sweep ends
 
@@ -87,3 +92,21 @@ def test_every_request_goes_through_the_throttle(sweeper):
     sw.sweep(season=2026)
 
     assert downloader.throttle.status()["in_window"] == len(downloader.requested)
+
+
+def test_invalid_pbp_page_is_recorded_without_stopping_the_sweep(sweeper):
+    sw, downloader = sweeper
+    original = downloader.download_if_new
+
+    def missing_table(link, **kwargs):
+        if "/boxscores/pbp/" in link:
+            downloader.requested.append(link)
+            downloader.throttle.reserve()
+            return True, b"<html>not a PBP page</html>"
+        return original(link, **kwargs)
+
+    downloader.download_if_new = missing_table
+    result = sw.sweep(season=2026)
+
+    assert result["pbp"] == {"new": 0, "cached": 0, "failed": 2}
+    assert "missing table#pbp" in sw.status.get_pull("wnba", "pbp")["last_error"]
