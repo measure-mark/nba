@@ -1,10 +1,5 @@
-# This SHOULD NOT BE RERUN unless you are retraining.
-# It only needs to be rerun when new players are added that are worth modeling directly.
-#
-# Rerunning renumbers every player id, because the map is built from unique() order.
-# BoxScoreStore asserts the player count against a hardcoded tripwire (1442 for NBA)
-# to ensure that a silent renumbering shows up as a loud failure rather than garbage
-# model inputs.
+# Existing player ids are immutable model inputs. New players are appended so an
+# artifact refresh cannot silently change the meaning of already-trained weights.
 
 import json
 
@@ -14,11 +9,18 @@ from leagues.config import LeagueConfig
 
 
 def make_player_map(league: LeagueConfig) -> dict:
-    """Build and write a league's player_map.json. Returns the map."""
+    """Build a stable player map, preserving ids and appending new players."""
     df = pd.read_csv(league.data_root / "agg.csv")
-    pid_map = {pid: i for i, pid in enumerate(df["Player ID"].unique())}
+    path = league.data_root / "player_map.json"
+    pid_map = json.loads(path.read_text()) if path.exists() else {}
 
-    with open(league.data_root / "player_map.json", "w") as writer:
+    next_id = max(pid_map.values(), default=-1) + 1
+    for pid in df["Player ID"].dropna().unique():
+        if pid not in pid_map:
+            pid_map[pid] = next_id
+            next_id += 1
+
+    with open(path, "w") as writer:
         json.dump(pid_map, writer, indent=1)
 
     print(f"{league.key}: {len(pid_map)} players")
