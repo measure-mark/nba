@@ -1,9 +1,14 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+models/
 
 # Cached basketball-reference HTML. Re-fetchable, and large -- never commit it.
 data/*/raw/
+# Raw ESPN game responses are retained locally for reparsing, not versioned.
+data/raw/espn/
+# Sourced from external data pipeline, not maintained in this repo.
+data/wnba/wehoop_player_box.parquet
 
 # Local config. .env.example is the tracked template.
 .env
