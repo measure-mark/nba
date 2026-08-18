@@ -8,19 +8,17 @@ dataset with no error anywhere.
 
 import pytest
 
-from model.minutes import check_minuntes_make_sense
-
 
 def test_regulation_differs_by_league(nba, wnba):
     """NBA regulation is 240 player-minutes (5x48), WNBA is 200 (5x40)."""
-    assert check_minuntes_make_sense(240, nba)
-    assert check_minuntes_make_sense(200, wnba)
+    assert 240 in nba.valid_game_minutes()
+    assert 200 in wnba.valid_game_minutes()
 
 
 def test_one_league_rule_rejects_the_other(nba, wnba):
     """The whole point of parameterizing: each league must reject the other's total."""
-    assert not check_minuntes_make_sense(200, nba)
-    assert not check_minuntes_make_sense(240, wnba)
+    assert 200 not in nba.valid_game_minutes()
+    assert 240 not in wnba.valid_game_minutes()
 
 
 @pytest.mark.parametrize("minutes", [265, 290, 315, 340])
@@ -28,14 +26,14 @@ def test_nba_overtimes(minutes, nba):
     """Each OT period adds 25 player-minutes. 315 (3OT) and 340 (4OT) were rejected by
     the old hardcoded 240/265/290 rule, even though schedule.csv contains 3OT and 4OT
     games -- the 'Handle overtimes' README TODO."""
-    assert check_minuntes_make_sense(minutes, nba)
+    assert minutes in nba.valid_game_minutes()
 
 
 @pytest.mark.parametrize("minutes", [225, 250])
 def test_wnba_overtimes(minutes, wnba):
-    assert check_minuntes_make_sense(minutes, wnba)
+    assert minutes in wnba.valid_game_minutes()
 
 
 def test_rejects_incomplete_game(nba):
     """A total between regulation and 1OT means missing or double-counted players."""
-    assert not check_minuntes_make_sense(250, nba)
+    assert 250 not in nba.valid_game_minutes()

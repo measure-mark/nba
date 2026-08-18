@@ -1,8 +1,10 @@
 import json
+import sys
 
 import pandas as pd
 
 from leagues.config import LeagueConfig
+from leagues.registry import LeagueRegistry
 
 
 def _official_names(values: pd.Series) -> set[str]:
@@ -35,8 +37,4 @@ def make_official_map(league: LeagueConfig) -> dict[str, int]:
 
 
 if __name__ == "__main__":
-    import sys
-
-    from leagues.registry import LeagueRegistry
-
     make_official_map(LeagueRegistry().get(sys.argv[1] if len(sys.argv) > 1 else "nba"))

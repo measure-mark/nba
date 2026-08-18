@@ -90,6 +90,19 @@ def get_team_name(table) -> str:
     cap = re.sub(r"\s*Table\s*$", "", cap)
     return re.sub(r"\s*\(\d+-\d+\)\s*$", "", cap).strip()
 
+
+def get_officials(soup: BeautifulSoup) -> tuple[str, ...]:
+    """Extract the game's officiating crew from its metadata block."""
+    label = soup.find(
+        "strong",
+        string=lambda text: bool(text)
+        and text.replace("\xa0", " ").strip() == "Officials:",
+    )
+    if label is None:
+        return ()
+    text = label.parent.get_text(" ", strip=True).removeprefix("Officials:").strip()
+    return tuple(name.strip() for name in text.split(",") if name.strip())
+
 def get_minimal_stats(soup: BeautifulSoup, filename: str, verbose=False) -> pd.DataFrame:
     ts = soup.find_all(name='table', class_='stats_table')
 
@@ -110,6 +123,7 @@ def get_minimal_stats(soup: BeautifulSoup, filename: str, verbose=False) -> pd.D
         raise ValueError(f"No full-game tables found in {filename}")
 
     df = pd.concat(dfs, ignore_index=True)
+    df["Officials"] = "|".join(get_officials(soup))
     df["filename"]=filename
     return df
 

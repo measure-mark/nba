@@ -5,9 +5,9 @@ Regression: the parser identified tables by caption prose, matching
 "<Team> (0-1) Table", so every table fell through to (None, None), get_minimal_stats
 concatenated an empty list, and the box score yielded nothing -- for every league.
 
-The fixture is a real page (trimmed to four tables), not hand-written HTML. The bug
-survived the earlier tests precisely because those used synthetic markup shaped to match
-what the parser already expected.
+The fixture is a real page (trimmed to four tables and the officials block), not
+hand-written HTML. The bug survived the earlier tests precisely because those used
+synthetic markup shaped to match what the parser already expected.
 """
 
 from pathlib import Path
@@ -17,10 +17,10 @@ from bs4 import BeautifulSoup
 
 from artifact_makers.make_minimal_box_scores import (
     get_minimal_stats,
+    get_officials,
     get_team_and_period,
     get_team_name,
 )
-from model.minutes import check_minuntes_make_sense
 
 FIXTURE = Path(__file__).parent / "fixtures" / "wnba_boxscores_202505160WAS.html"
 
@@ -57,6 +57,13 @@ def test_team_name_strips_the_win_loss_record(tables):
     assert get_team_name(tables["box-ATL-game-basic"]) == "Atlanta Dream"
 
 
+def test_extracts_officials_from_game_metadata(soup):
+    """agg.csv's Officials column feeds official_map.json, so the crew has to come off
+    the real page -- where the label carries a non-breaking space and the names sit in
+    the parent div, not in the <strong> the search finds."""
+    assert get_officials(soup) == ("Kevin Fahy", "Charles Watson", "Blanca Burns")
+
+
 def test_parses_both_teams_once_each(soup):
     df = get_minimal_stats(soup, "wnba_boxscores_202505160WAS.html")
 
@@ -78,7 +85,9 @@ def test_parsed_minutes_satisfy_the_wnba_rule(soup, wnba):
 
     for code, group in df.groupby("Team Code"):
         total = sum(to_minutes(mp) for mp in group.MP)
-        assert check_minuntes_make_sense(total, wnba), f"{code} totalled {total}"
+        assert any(
+            abs(total - valid) <= 0.1 for valid in wnba.valid_game_minutes()
+        ), f"{code} totalled {total}"
 
 
 def test_empty_page_raises_rather_than_returning_nothing(wnba):

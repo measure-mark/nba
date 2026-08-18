@@ -2,10 +2,12 @@
 # artifact refresh cannot silently change the meaning of already-trained weights.
 
 import json
+import sys
 
 import pandas as pd
 
 from leagues.config import LeagueConfig
+from leagues.registry import LeagueRegistry
 
 
 def make_player_map(league: LeagueConfig) -> dict:
@@ -28,8 +30,4 @@ def make_player_map(league: LeagueConfig) -> dict:
 
 
 if __name__ == "__main__":
-    import sys
-
-    from leagues.registry import LeagueRegistry
-
     make_player_map(LeagueRegistry().get(sys.argv[1] if len(sys.argv) > 1 else "nba"))

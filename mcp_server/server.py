@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import UTC, datetime
 
 import pandas as pd
@@ -6,7 +7,9 @@ import redis
 from mcp.server import MCPServer
 
 from artifact_makers.aggregate import aggregate_box_scores, cached_box_scores
+from artifact_makers.make_official_map import make_official_map
 from artifact_makers.make_player_map import make_player_map
+from artifact_makers.make_team_map import make_team_map
 from leagues.registry import LeagueRegistry
 from scraper.play_by_play import play_by_play_coverage
 from status.store import StatusStore
@@ -14,7 +17,7 @@ from throttle.redis_throttle import RedisThrottle
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 DATASETS = ("schedules", "boxscores", "pbp")
-ARTIFACTS = ("agg", "team_map", "player_map")
+ARTIFACTS = ("agg", "team_map", "player_map", "official_map")
 
 mcp = MCPServer("nba-status", instructions="Read-only status for the basketball-reference scraper.")
 registry = LeagueRegistry()
@@ -110,13 +113,11 @@ def get_coverage(league: str, season: int | None = None) -> dict:
 
 @mcp.tool()
 def build_artifacts(league: str) -> dict:
-    """Aggregate box scores into agg.csv and generate player_map.json.
+    """Build agg.csv and its team, player, and official maps for one league.
 
-    This two-step process parses all cached box scores and creates the aggregated
-    dataset and player map for the league.
+    The maps are generated from the newly aggregated dataset, so every artifact is
+    scoped to the requested league and reflects the same source files.
     """
-    import time
-
     lg = registry.get(league)
     start_time = time.time()
 
@@ -125,14 +126,44 @@ def build_artifacts(league: str) -> dict:
     agg_duration = time.time() - start_time
     store.aggregation_ran(lg.key, "agg", agg_duration, rows_out, source_files)
 
-    # Step 2: Generate player map
+    team_map_duration = 0.0
+    player_map_duration = 0.0
+    official_map_duration = 0.0
+    teams_found = 0
+    players_found = 0
+    officials_found = 0
+
     if rows_out > 0:
+        # Step 2: Generate team map
+        map_started = time.time()
+        team_map = make_team_map(lg)
+        team_map_duration = time.time() - map_started
+        store.aggregation_ran(
+            lg.key, "team_map", team_map_duration, len(team_map), source_files
+        )
+        teams_found = len(team_map)
+
+        # Step 3: Generate official map
+        map_started = time.time()
+        official_map = make_official_map(lg)
+        official_map_duration = time.time() - map_started
+        store.aggregation_ran(
+            lg.key,
+            "official_map",
+            official_map_duration,
+            len(official_map),
+            source_files,
+        )
+        officials_found = len(official_map)
+
+        # Step 4: Generate player map
+        map_started = time.time()
         player_map = make_player_map(lg)
-        map_duration = time.time() - start_time - agg_duration
-        store.aggregation_ran(lg.key, "player_map", map_duration, len(player_map), source_files)
+        player_map_duration = time.time() - map_started
+        store.aggregation_ran(
+            lg.key, "player_map", player_map_duration, len(player_map), source_files
+        )
         players_found = len(player_map)
-    else:
-        players_found = 0
 
     return {
         "league": league,
@@ -142,11 +173,21 @@ def build_artifacts(league: str) -> dict:
             "duration_s": round(agg_duration, 3),
             "agg_csv_path": str(lg.data_root / "agg.csv"),
         },
+        "team_map": {
+            "teams_found": teams_found,
+            "duration_s": round(team_map_duration, 3),
+            "team_map_path": str(lg.data_root / "team_map.json"),
+        },
         "player_map": {
             "players_found": players_found,
-            "duration_s": round(time.time() - start_time - agg_duration, 3),
+            "duration_s": round(player_map_duration, 3),
             "player_map_path": str(lg.data_root / "player_map.json"),
-        }
+        },
+        "official_map": {
+            "officials_found": officials_found,
+            "duration_s": round(official_map_duration, 3),
+            "official_map_path": str(lg.data_root / "official_map.json"),
+        },
     }
 
 

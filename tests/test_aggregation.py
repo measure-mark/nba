@@ -48,7 +48,8 @@ def test_wnba_box_scores_are_not_skipped(wnba):
 
     df = pd.read_csv(wnba.data_root / "agg.csv")
     assert list(df.columns) == [
-        "Player", "Player ID", "MP", "PTS", "Team", "Team Code", "Period", "filename",
+        "Player", "Player ID", "MP", "PTS", "Team", "Team Code", "Period",
+        "Officials", "filename",
     ]
     assert set(df["Player ID"]) == {"howarrh01", "grayal01"}
     assert df.filename.unique().tolist() == ["wnba_boxscores_202605170ATL.html"]
