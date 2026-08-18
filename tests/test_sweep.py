@@ -4,6 +4,8 @@ Contract: one bad team code must not take down the sweep, and every league's sta
 must be written under its own keys.
 """
 
+import json
+
 import fakeredis
 import pytest
 
@@ -20,6 +22,19 @@ SCHEDULE_HTML = """
   <tr><td><a href="/wnba/players/h/howarrh01.html">Rhyne Howard</a></td></tr>
   <tr><td><a href="/boxscores/202105160TOR.html">an NBA game</a></td></tr>
 </table></body></html>
+"""
+
+BOX_SCORE_HTML = """
+<html><body>
+<div><strong>Officials:&nbsp;</strong>Ref A, Ref B, Ref C</div>
+<table class="suppress_all sortable stats_table" id="box-ATL-game-basic">
+  <caption>Atlanta Dream (1-0) Table</caption>
+  <tr><th colspan="3">header</th></tr>
+  <tr><th>Rk</th><th>MP</th><th>PTS</th></tr>
+  <tr><th><a href="/wnba/players/h/howarrh01w.html">Rhyne Howard</a></th><td>32:11</td><td>21</td></tr>
+  <tr><th><a href="/wnba/players/g/grayal01w.html">Allisha Gray</a></th><td>28:04</td><td>14</td></tr>
+</table>
+</body></html>
 """
 
 
@@ -110,3 +125,15 @@ def test_invalid_pbp_page_is_recorded_without_stopping_the_sweep(sweeper):
 
     assert result["pbp"] == {"new": 0, "cached": 0, "failed": 2}
     assert "missing table#pbp" in sw.status.get_pull("wnba", "pbp")["last_error"]
+
+
+def test_aggregate_builds_official_map_for_normal_scraper_path(sweeper, wnba):
+    sw, _ = sweeper
+    wnba.raw_dir.mkdir(parents=True, exist_ok=True)
+    (wnba.raw_dir / "wnba_boxscores_202605170ATL.html").write_text(BOX_SCORE_HTML)
+
+    assert sw.aggregate() == (2, 1)
+
+    official_map = json.loads((wnba.data_root / "official_map.json").read_text())
+    assert official_map == {"Ref A": 0, "Ref B": 1, "Ref C": 2}
+    assert sw.status.get_aggregation("wnba", "official_map")["rows_out"] == "3"

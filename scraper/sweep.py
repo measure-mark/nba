@@ -6,6 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from artifact_makers.aggregate import aggregate_box_scores
+from artifact_makers.make_official_map import make_official_map
 from download_manager import DownloadManager
 from leagues.config import LeagueConfig
 from scraper.play_by_play import has_pbp_table
@@ -158,4 +159,14 @@ class LeagueSweeper:
         self.status.aggregation_ran(
             self.league.key, "agg", time.monotonic() - started, rows, files
         )
+        if rows:
+            started = time.monotonic()
+            official_map = make_official_map(self.league)
+            self.status.aggregation_ran(
+                self.league.key,
+                "official_map",
+                time.monotonic() - started,
+                len(official_map),
+                files,
+            )
         return rows, files
